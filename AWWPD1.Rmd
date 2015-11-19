@@ -7,7 +7,7 @@ output: pdf_document
   
 # FOTOGRAFIA SUKCESU - ANALIZA KANONICZNA
 
-Za pomoca klasycznych wspólczynników korelacji oraz analizy kanonicznej zabadono zaleznosc pomiedzy zmiennymi opisujacymi ocene oraz cechy zdjec zamieszczonych na serwisie internetowym. Wnioskowanie pozwolilo na odnalezienie kilku interesujacych zwaleznosci. 
+Za pomoca klasycznych wspólczynników korelacji oraz analizy kanonicznej zabadono zaleznosc pomiedzy zmiennymi opisujacymi ocene oraz cechy zdjec zamieszczonych na serwisie internetowym. Wnioskowanie pozwolilo na odnalezienie kilku interesujacych zaleznosci. 
 
 ```{r library, message=FALSE,warning=FALSE}
 library(moments)
@@ -237,8 +237,8 @@ Druga zmienna kanoniczna -- slabe walory artystyczne (`r wyniki[[1]][1,2]`)
 - koty --  wiecej kotów to gorsza wartosc artystyczna
 
 Trzecia zmienna kanoniczna -- slaba ostrosc oraz slaba ocena
-- bycie kochanym -- kolor inny niz zielony niebieksi i filetowy powinien wplywac dodatnio ostrosc i ocene
-- edukacja -- wieksze zadowolenie z przyjaciol i osiagniec zyciowych (0.45)
+- kolor -- kolor inny niz zielony niebieksi i filetowy powinien wplywac dodatnio na ostrosc i/lub ocene
+- odbicia -- wystepowanie odbicia powinien wplywac ujemnie na ostrosc i/lub ocene
 
 \newpage
 
@@ -372,6 +372,6 @@ outliers[1:4]
 
 Klasyczne wnioskowanie skazuje na potencjal publikacji zdjec na poczatku tygodnia. W przypadku komentowania zdjecia badz artyzmu ciezko wyznaczyc racjonalny zwiazek przycznowo skutkowy. Zacheta do komentowania moze stanowic poprawe oceny za artyzm. Zacheta moze byc np. kontrawersyjnosc zdjecia.
 Analiza kanoniczna pozwala na bardziej szczególowe zbadanie zaleznosci pomiedzy zmiennymi.
-Duzo kotów które ciezo sfotografowac wiec moze zakup lepszego aparatu.
+Duzo kotów na zdjeciu powinno prowadzic do wyzszych ocen lecz koty prawdop. ciezo sfotografowac co powoduje mniejsze wyniki za ostrosc. Rozwiazaniem moze byc zakup lepszego aparatu. Wieksza ilosc kotów na zdjieciu moze takze prowadzic do nizszej oceny za walory artystyczne. Brak odbicia na zdjeciu powinien wplywac dodatnio na wyniki.
 
 
