@@ -1,0 +1,377 @@
+---
+title: "AnalizaWW_PD1"
+author: "Maciej Nasinski"
+date: "November 16, 2015"
+output: pdf_document
+---
+  
+# FOTOGRAFIA SUKCESU - ANALIZA KANONICZNA
+
+Za pomoca klasycznych wspólczynników korelacji oraz analizy kanonicznej zabadono zaleznosc pomiedzy zmiennymi opisujacymi ocene oraz cechy zdjec zamieszczonych na serwisie internetowym. Wnioskowanie pozwolilo na odnalezienie kilku interesujacych zwaleznosci. 
+
+```{r library, message=FALSE,warning=FALSE}
+library(moments)
+library(CCA)
+library(ggplot2)
+```
+
+Badanie zaczynamy od wgrania oraz obróbki danych. Poczatkowo zakladamy iz wszystkie zmienne sa typu "numeric" co pozwoli na strorzenie macierzy. Nastepnie tworzymy nowy data frame w którym konkretne zmienne formatujemy na typ "factor" z odpowiednio przypisanymi "levels".
+
+```{r preprocessing,echo=TRUE,tidy=TRUE}
+setwd("C:/Users/MACIEK/Desktop/analizaWW/AWWPD1")
+zdjecia<-read.csv("zdjecia.csv",sep=";",header = TRUE,colClasses=c(rep("numeric",11)),row.names=4)
+zdjecia0<-zdjecia
+skalarad<-c("b.slabo","slabo","przecietnie", "dobrze", "b.dobrze","rewelacyjnie")
+#loop across 3-factor var. with the same levels
+factors<-sapply(c(5,8,9),function(x) zdjecia[,x]<<-factor(zdjecia[,x],labels=skalarad))
+# factor - kolor
+zdjecia$kolor<-factor((zdjecia$kolor),labels=c("fioletowy","zielony", "niebieski","inny"))
+#factor - miejsce
+zdjecia$miejsce<-factor((zdjecia$miejsce),labels=c("Polska","inny kraj"))
+#factor - odbicia
+zdjecia$odbicia<-factor((zdjecia$odbicia),labels=c("brak","wys. odbicia"))
+```
+\newpage
+
+W programie R CRAN nie istnieje funkcja rozbijajacy zmienna typu factor na osobne kolumny o kodowaniu 0-1. W przypadku zmiennej 2 poziomowej wystarczy odjac od wszystkich wartosci w kolumnie wartosc 1. Dla zmiennych wielopoziomowych procedura nie jest tak prosta. 
+Autor stworzyl nowa procedure pozwalajaca na rozbicie zmiennej factor na konkretne levele w osobnych kolumnach. 
+Tworzymy trzeci data frame w którym rozbijamy zmienne typu factor.
+
+```{r,echo=TRUE}
+zdjecia02<-zdjecia0
+sap1<-sapply(c("miejsce","odbicia","kolor"),function(x) zdjecia02[,x]<<-as.factor(zdjecia02[,x]))
+for(i in c("miejsce","odbicia","kolor")){
+sap2<-sapply(2:length(levels(zdjecia02[,i])),function(x) zdjecia02[paste0(i,x)]<<-as.numeric(zdjecia02[,i]==levels(zdjecia02[,i])[x]))
+}
+zdjecia02<-zdjecia02[,!names(zdjecia02) %in% c("miejsce","odbicia","kolor")]
+
+```
+
+Warto zaprezentowac wyglad analizowanych data frame-ow.
+
+```{r,echo=TRUE}
+head(zdjecia0,3)
+head(zdjecia,3)
+head(zdjecia02,3)
+```
+
+\newpage
+
+## Czy istnieja istotne róznice w liczbie komentarzy zdjec zrobionych zagranica i w Polsce?
+
+```{r terytorium, echo=TRUE}
+komPolska<-zdjecia[which(zdjecia$miejsce=="Polska"),4]
+kominne<-zdjecia[which(zdjecia$miejsce=="inny kraj"),4]
+t.test(komPolska,kominne)
+```
+
+Odrzucamy hipoteze zerowa - "true difference in means is equal to 0". 
+T-test wskazuje na istotna roznice wzgledem sredniej.
+
+## Czy wsród zdjec o dominujacym kolorze niebieskim srednia liczba osób jest równa sredniej liczbie kotów na zdjeciu ?
+
+Przystepujemy do wydzielenia z data frame wierszy dla których zdjecie posiada kolor niebieski. Nastepnie w latwy sposób obliczamy statystyke t dla róznicy liczby osob oraz kotów w nowym data frame.
+
+```{r niebieskie, echo=TRUE}
+zdjecianie<-zdjecia[which(zdjecia[,"kolor"]=="niebieski"),]
+zdjecianieosoby<-zdjecianie$osoby
+zdjecianiekoty<-zdjecianie$koty
+t.test(zdjecianieosoby,zdjecianiekoty)
+```
+
+W tym przypadku nie mozemy odrzucic hipotezy zerowej-"true difference in means is equal to 0".
+
+\newpage
+
+##Czy wyzsze oceny za artyzm sa skorelowane z nizszymi ocenami za ostrosc zdjecia?
+
+```{r correlation and table,echo=TRUE,tidy=TRUE,size=7}
+tableao<-as.matrix(table((zdjecia$artyzm),(zdjecia$ostrosc),deparse.level=2))
+tableao
+sumr<-apply(tableao,1,sum)
+sumc<-apply(tableao,2,sum)
+tableao<-rbind(tableao,sumc)
+tableao<-cbind(tableao,sumr=c(sumr,sum(sumr)))
+sapply(1:6,function(x) tableao[,x]/tableao[7,x])
+#correalation and significance of it
+cor.test(as.numeric(zdjecia0$artyzm),as.numeric(zdjecia0$ostrosc),method = c("spearman"))
+```
+
+## Canonical Correlation
+
+Przeprowadzono losowanie 781 liczb ze zbioru liczb naturalnych od 1 do 2961 (liczba wierszy bazy danych). W celu umozliwienia latwego powtórzenia badania z identycznymi wynikami, ustawiono generator liczb losowych na konkretnym poziomie.
+
+```{r random rows,echo=TRUE}
+set.seed(308914)
+randomrows<-sort(sample(1:nrow(zdjecia0), 781, replace = FALSE, prob = NULL))
+zdjecia.random<-zdjecia0[randomrows,]
+summary(zdjecia.random)
+```
+
+\newpage
+
+Przy pomocy pakietu "moments" zbudowano tabele z podstawowymi charakterystykami zmiennych w modelu.
+
+```{r stats, echo=TRUE}
+kurtosis<-sapply(1:ncol(zdjecia.random),function(x) kurtosis(zdjecia.random[,x]))
+skewness<-sapply(1:ncol(zdjecia.random),function(x) skewness(zdjecia.random[,x]))
+sd<-sapply(1:ncol(zdjecia.random),function(x) sd(zdjecia.random[,x]))
+mean<-sapply(1:ncol(zdjecia.random),function(x) mean(zdjecia.random[,x]))
+bound<-mean +3*sd
+jarque.stat<-sapply(1:ncol(zdjecia.random),function(x) jarque.test(zdjecia.random[,x])$statistic)
+stats<-matrix(1:(ncol(zdjecia0)*6),ncol=ncol(zdjecia0),nrow=6)
+stats<-rbind(kurtosis,skewness,jarque.stat,sd,mean,bound)
+colnames(stats)<- colnames(zdjecia0)
+stats
+```
+
+\newpage
+
+W celu potwierdzenia rozkladu zmiennych, na jedym wykresie przedstawiono hiostogramy dla wszystkich zmiennych. Opcjonalnie mozna wykorzystac funkcje qplot z pakietu ggplot2 przedstawiajac ten sam wykres za pomoca jednej funkcji.
+
+```{r histograms,echo=TRUE}
+par(mfrow=c(3,4), mar=c(4,4,2,1), oma=rep(2,4))
+for(i in 1:ncol(zdjecia0)){
+    hist(zdjecia0[,i],xlab = colnames(zdjecia0)[i],main = "")
+}
+```
+
+Wiekszosc zmiennych posiada charakterystyki nie pozwalajace odrzucic hipotezy zerowej zakladajacej normalnosc rozkladu. Zmienne typu factor których poziomy nie reprezentuja "rozwoju" danej cechy, posiadaja chrakterystyki nie pozwalajace na przyjecie hipotezy zerowej. Nalezy wyróznic zmienna osoby która posiada charakterystyki rozkladu wykladniczego, a koty juz nie.
+
+\newpage
+
+Korelacja spearmana pomiedzy wszystkimi zmiennymi.
+
+```{r correlations, echo=TRUE,cache=TRUE,tidy=TRUE}
+round(cor(zdjecia0, method = c("spearman")),2)
+```
+
+\newpage  
+
+Korelacja Pearsona pomiedzy wszystkimi zmiennymi.
+
+```{r,echo=TRUE,cache=TRUE}
+round(cor(zdjecia0, method = c("pearson")),2)
+```
+
+Nalezy wyróznic korelacje pomiedzy zmiennymi komentarz oraz artyzm, która jest najwieksza co do wartosci bezwzglednej - `r cor(zdjecia0$artyzm,zdjecia0$komentarze,method = c("pearson"))`. Relacja ta wydaje sie racjonalna.
+Druga korelacja warta wyróznienia jest relacja pomiedzy dniem miesiaca publikacji oraz ocena. Interpretacja tego wspólczynnika ukazuje potencjal publikowania zdjec na poczatku miesiaca. Nalezy zaznaczyc ze zmienna dla dnia publikacji ma charakterystyki wskazujace na rozklad istotnie normalny.
+
+Testy na istotnosc pozwalaja na odrzucenie hipotezy zerowej zakladajacej korelacje równa zeru.
+
+*TESTY NA ISTOTNOSC DWÓCH NAJBARDZIEJ INTERESUJACYCH KORELACJI ZAPREZENTOWANO NA DRUGIEJ STRONIE
+
+\newpage 
+
+```{r,echo=TRUE}
+cor.test(as.numeric(zdjecia0$artyzm),as.numeric(zdjecia0$komentarze),method = c("pearson"))
+cor.test(as.numeric(zdjecia0$ocena),as.numeric(zdjecia0$dzien),method = c("spearman"))
+```
+
+\newpage  
+
+## Canonical Correlations
+
+Stworzono zmienne konieczne do przeprowadzenia analizy.Kryterium doboru zmiennych bylo narzucone z góry.
+
+```{r preproc cc, echo=TRUE}
+zbior1<-c("artyzm", "ostrosc", "ocena")
+zbior2<-c("kolor2","kolor3","kolor4","koty", "miejsce2", "odbicia2", "dzien", "osoby")
+matY<-zdjecia02[,zbior1]
+matX<-zdjecia02[,zbior2]
+corrall<-matcor(matX,matY)
+corrall$XYcor
+```
+
+W macierzy nie mozna wyróznic istotnej ilosci duzych co do wartosci bezwzglednej korelacji.
+
+\newpage
+
+```{r canonical correlations,echo=TRUE}
+cc1 <- cc(matX,matY)
+# sklad oraz rodzaje wynikow dla funkcji cc
+str(cc1)
+```
+
+\newpage
+
+##Zinterpretuj powiazania miedzy zbiorami zmiennych, analizujac wielkosci standaryzowanych wag kanonicznych i ladunków czynnikowych. Czy wystepuja róznice? Jakie? Interpretacja powinna byc przeprowadzona jedynie dla istotnych korelacji kanonicznych.
+
+Warto ukazac najwazniejsze wyniki otrzymane z funkcji cc.
+
+```{r outcomes cc,echo=TRUE}
+cc1$cor
+cc1$ycoef
+cc1$xcoef
+```
+
+Pierwszy wspólczynnik korelacj kanonicznej jest równy `r cc1$cor[1]` - i.e. najwiekszy mozliwy do osiagniecia 
+wspólczynnik otrzymany z liniowyej kombinacji zmiennych z obu  badanych zbiorow. Zgodnie z oczekiwaniami policzony wspólczynnik 
+jest wiekszy niz dowolny wspólczynnik z macierzy korelacji miedzy zmienna ze zbioru X, a zmienna ze zbioru Y.
+
+Poniewaz zmienne ukazano na róznych skalach oraz maja rózna wariancje powinnismy analizowac "wystandaryzowane wagi kanoniczne". Róznica w interpretacji polega jedynie na zmianie miar zmian danej zmiennej.
+
+\newpage
+
+### Standardized Canonical Coefficients
+
+
+```{r std,echo=TRUE}
+wyniki<-list()
+wyniki[[1]] <- diag(sqrt(diag(cov(matY)))) %*% cc1$ycoef
+rownames(wyniki[[1]])<-rownames(cc1$ycoef)
+wyniki[[2]] <- diag(sqrt(diag(cov(matX)))) %*% cc1$xcoef
+rownames(wyniki[[2]])<-rownames(cc1$xcoef)
+wyniki
+```
+Analizujemy kilka losowych zmiennych o najwyzszych co do wartosci bezwglednej wartosciach wspólczynników.
+Nelezy zaznaczyc ze wyniki mozna analizowac dwukierunkowo. Przemnozenie stron przez minus jeden powoduje odwrócenie wnioskowania przy zachowaniu wiarygodnosci interpretacji.
+
+Pierwsza zmienna kanoniczna -- wysoka ostrosc(`r wyniki[[1]][2,1]`) oraz slaba ocena(`r wyniki[[1]][3,1]`)
+- kolor -- kolor inny niz zielony niebieksi i filetowy powinien wplywac ujemnie na ocene lub/i dodatnio na ostrosc
+- koty -- mniej kotów to gorsza ocena lub/i lepsza ostrosc
+- dzien -- im wczesniej w miesiacu zrobimy zdjecie tym lepiej dla oceny i/lub otrzymamy lepsza ostrosc (moze jestesmy bardziej wypoczeci;p)
+
+Druga zmienna kanoniczna -- slabe walory artystyczne (`r wyniki[[1]][1,2]`)
+- kolor -- kolor inny niz zielony niebieksi i filetowy powinien wplywac ujemnie na walory artystyczne zdjecia
+- koty --  wiecej kotów to gorsza wartosc artystyczna
+
+Trzecia zmienna kanoniczna -- slaba ostrosc oraz slaba ocena
+- bycie kochanym -- kolor inny niz zielony niebieksi i filetowy powinien wplywac dodatnio ostrosc i ocene
+- edukacja -- wieksze zadowolenie z przyjaciol i osiagniec zyciowych (0.45)
+
+\newpage
+
+### Ile par zmiennych kanonicznych wybrac?
+
+Procedura Liczenia lambdy WILKSA powinna ulatwic analize wiekszych zbiorów danych - i.e. wyboru istotnych zmiennych kanonicznych do dalszej analizy.
+
+
+```{r WILKS FUNCTION,echo=TRUE}
+WILKSL<-function(matX,matY,cc1){
+ev <- (1 - cc1$cor^2)
+n <- dim(matX)[1]
+p <- length(matX)
+q <- length(matY)
+k <- min(p, q)
+m <- n - 3/2 - (p + q)/2
+w <- rev(cumprod(rev(ev)))
+# initialize
+d1 <- d2 <- f <- vector("numeric", k)
+
+for (i in 1:k) {
+    s <- sqrt((p^2 * q^2 - 4)/(p^2 + q^2 - 5))
+    si <- 1/s
+    d1[i] <- p * q
+    d2[i] <- m * s - p * q/2 + 1
+    r <- (1 - w[i]^si)/w[i]^si
+    f[i] <- r * d2[i]/d1[i]
+    p <- p - 1
+    q <- q - 1
+}
+pv <- pf(f, d1, d2, lower.tail = FALSE)
+dmat <- cbind(WilksL = w, F = f, df1 = d1, df2 = d2, p = pv)
+return(dmat)
+## source: http://www.ats.ucla.edu/stat/r/dae/canonical.htm
+}
+```
+
+FUNKCJA DO SZYBKIEGO POLICZENIA LAMBDY WILKSA
+
+```{r}
+WILKS2<-function(cc1){
+    dmat2<-matrix(0,nrow=ncol(matY),ncol=2)
+    sapply(1:ncol(matY),function(i) dmat2[i,1]<<-prod((1-cc1$cor^2)[i:(ncol(matY))]))
+    return(dmat2)
+}
+```
+
+\newpage
+
+Testowanie istotnosci koreacji kanonicznych dla analizowanych danych. 
+
+```{r WILKS test,echo=TRUE}
+WILKSL(matX,matY,cc1)
+WILKS2(cc1)
+```
+
+\newpage
+
+### Wspólczynnik redundancji 
+
+Redundacja mowi nam ile przecietnie wariancji w jednym zbiorze jest wyjasnione przez dana
+zmienna kanoniczna  przy danym innym zbiorze zmiennych. Wartosc redundacji calkowitej 
+moze byc wazna analityczna informacja o naszym modelu. Mowi o procencie calkowitej 
+wariancji jednego zbioru wyjasniona w ramach modelu. 
+
+```{r ,echo=TRUE}
+REDUNT<-function(matX,matY,cc1){
+    eigenmatY<-cc1$cor
+    vector1<-vector(,length(matY))
+    sapply(1:ncol(matY),function(i) vector1[i]<<-sqrt(eigenmatY[i]))
+    names1<-c("opposite variance","own variance")
+    names2<-c("prop stdvar v","prop stdvar u")
+    matim<<-list()
+    for(i in (1:ncol(matY))){
+        a<-round(sum((cc1$scores$corr.Y.xscores[,i])^2)/ncol(matY),3)
+        b<-round(a/vector1[i],3)
+        c<-round(sum((cc1$scores$corr.X.yscores[,i])^2)/ncol(matX),3)
+        d<-round(c/vector1[i],3)
+        assign(paste0("amat",i),matrix(c(c,d,a,b),byrow=TRUE,nrow=2,ncol=2,dimnames=list(names2,names1)),inherit=TRUE)
+        matim[[i]]<<-get(paste0("amat",i))
+    }
+    return(matim)
+}
+```
+
+Zastosotanie funkcji REDUNT
+
+```{r,echo=TRUE}
+REDUNT(matX,matY,cc1)
+```
+DANE W PROCENTACH:
+
+- 1 zmienna kanoniczna wyjasnia przecietnie `r matim[[1]][1,2]*100` zmiennosci w zbiorze Y w oparciu o X. Redundancja wynosi `r matim[[1]][1,1]*100`
+
+- 2 zmienna kanoniczna wyjasnia przecietnie `r matim[[2]][1,2]*100` zmiennosci w zbiorze Y w oparciu o X. Redundancja wynosi `r matim[[2]][1,1]*100`
+
+- 2 zmienna kanoniczna wyjasnia przecietnie `r matim[[3]][1,2]*100` zmiennosci w zbiorze Y w oparciu o X. Redundancja wynosi `r matim[[2]][1,1]*100`
+
+\newpage
+
+##Sprawdz, czy w zbiorze danych wystepuja obserwacje odstajace i okresl, czy budza one podejrzenia. Jako etykiety mozesz uzyc zmiennej nr zdjecia.
+
+
+```{r outliers,echo=TRUE}
+par(mfrow=c(3,4), mar=c(4,4,2,1), oma=rep(2,4))
+for(i in 1:ncol(zdjecia0)){
+    boxplot(zdjecia0[,i],xlab = colnames(zdjecia0)[i],main = "")
+}
+```
+
+```{r,echo=TRUE}
+outliers<-list()
+for(i in 1:ncol(zdjecia0)){
+  tt<-zdjecia0[which(zdjecia0[,i]>stats[6,i]),]
+  outliers[[i]]<-tt
+}
+  names(outliers)<-c(colnames(zdjecia0))
+```
+
+\newpage
+
+OUTLIERS
+
+```{r,echo=TRUE}
+outliers[1:4]
+```
+
+\newpage
+
+##Jakich wskazówek udzielisz Aminie na podstawie przeprowadzonej analizy? Jakie cechy powinny miec publikowane zdjecia, zeby uzyskiwaly wyzsze oceny? Uzasadnij.
+
+Klasyczne wnioskowanie skazuje na potencjal publikacji zdjec na poczatku tygodnia. W przypadku komentowania zdjecia badz artyzmu ciezko wyznaczyc racjonalny zwiazek przycznowo skutkowy. Zacheta do komentowania moze stanowic poprawe oceny za artyzm. Zacheta moze byc np. kontrawersyjnosc zdjecia.
+Analiza kanoniczna pozwala na bardziej szczególowe zbadanie zaleznosci pomiedzy zmiennymi.
+Duzo kotów które ciezo sfotografowac wiec moze zakup lepszego aparatu.
+
+
